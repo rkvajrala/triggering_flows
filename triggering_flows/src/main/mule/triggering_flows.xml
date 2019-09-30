@@ -1,5 +1,69 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd"></mule>
+<mule xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="9903b315-5025-4454-9a47-5b1c35725d0a" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="9bfc9152-d9b2-4c9d-86f5-e942d0eb2a54" >
+		<db:my-sql-connection host="mudb.learn.mulesoft.com" port="3306" user="mule" password="mule" database="training" />
+	</db:config>
+	<jms:config name="JMS_Config" doc:name="JMS Config" doc:id="14721fbc-5449-4295-bde2-9495a7cd277d" >
+		<jms:active-mq-connection />
+	</jms:config>
+	<vm:config name="VM_Config" doc:name="VM Config" doc:id="0e3b0a7f-1eea-43c1-b9c3-3e1929dc9d4f" >
+		<vm:queues >
+			<vm:queue queueName="account_queue" />
+		</vm:queues>
+	</vm:config>
+	<file:config name="File_Config" doc:name="File Config" doc:id="ae93bfa1-f547-4da8-a647-77b45619c6c8" >
+		<file:connection workingDir="D:\MuleAppData\Module12" />
+	</file:config>
+	<flow name="triggering_flowsFlow" doc:id="23378689-2a91-40ee-9077-9f4d8b775cab" >
+		<http:listener doc:name="Listener" doc:id="7af0d3d6-4dce-43a7-9daf-0dab8632f2e4" config-ref="HTTP_Listener_config" path="JMSQueue">
+			<http:response >
+				<http:body ><![CDATA[#["Request submitted to Queue."]]]></http:body>
+			</http:response>
+		</http:listener>
+		<db:select doc:name="Select" doc:id="cd0b61c3-cb1a-4d0c-9494-78726efc156a" config-ref="Database_Config">
+			<db:sql >select * from accounts</db:sql>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="214a0131-72d2-4909-9416-bf824eeabf00" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<batch:job jobName="triggering_flowsBatch_Job" doc:id="e3987475-065f-4e37-8bde-42868240fdaa" >
+			<batch:process-records >
+				<batch:step name="Batch_Step" doc:id="34c9b52c-3b4d-4357-b10d-266057e87be7" >
+					<batch:aggregator doc:name="Batch Aggregator" doc:id="692f8714-1e26-4c2d-8a1a-7b8a9ba659b6" size="10">
+						<ee:transform doc:name="Transform Message" doc:id="1ea7e6c0-52fd-49cd-99c5-82f9cb388104" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<vm:publish doc:name="Publish" doc:id="1f6c6110-c434-4ddf-97a6-f5f4d9beb736" config-ref="VM_Config" queueName="account_queue"/>
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+		</batch:job>
+	</flow>
+	<flow name="triggering_flowsFlow1" doc:id="2b3faeea-e238-42cf-ad0b-af7902dcdaac" >
+		<vm:listener doc:name="Listener" doc:id="c621dcd1-730b-42ac-8569-f367fb3016c8" config-ref="VM_Config" queueName="account_queue"/>
+		<file:write doc:name="Write" doc:id="b972a436-fbb5-4652-a448-b4886de208db" config-ref="File_Config" path="#[uuid() ++ 'out.json']" />
+	</flow>
+</mule>
